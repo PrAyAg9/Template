@@ -1,0 +1,103 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <set>
+using namespace std;
+
+typedef pair<int, int> Point;
+
+// Function to normalize the shape to a canonical form
+vector<Point> normalize_shape(vector<Point> shape) {
+    if (shape.empty()) return shape;
+    
+    // Find minimum x and y
+    int min_x = shape[0].first, min_y = shape[0].second;
+    for (const auto &p : shape) {
+        min_x = min(min_x, p.first);
+        min_y = min(min_y, p.second);
+    }
+    
+    // Translate points
+    for (auto &p : shape) {
+        p.first -= min_x;
+        p.second -= min_y;
+    }
+    
+    // Sort points lexicographically
+    sort(shape.begin(), shape.end());
+    return shape;
+}
+
+// Function to rotate a shape 90 degrees counterclockwise
+vector<Point> rotate_shape(const vector<Point> &shape) {
+    vector<Point> rotated;
+    for (const auto &p : shape) {
+        rotated.emplace_back(-p.second, p.first);
+    }
+    return normalize_shape(rotated);
+}
+
+// Generate all possible rotations of a shape
+set<vector<Point>> generate_all_rotations(vector<Point> shape) {
+    set<vector<Point>> rotations;
+    shape = normalize_shape(shape);
+    
+    for (int i = 0; i < 4; ++i) {
+        rotations.insert(shape);
+        shape = rotate_shape(shape);
+    }
+    return rotations;
+}
+
+// Check if two shapes are equivalent under rotation
+bool are_shapes_equivalent(const vector<Point> &shape1, const vector<Point> &shape2) {
+    auto rotations1 = generate_all_rotations(shape1);
+    auto normalized_shape2 = normalize_shape(shape2);
+    
+    return rotations1.count(normalized_shape2) > 0;
+}
+
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(nullptr);
+    
+    int N;
+    cin >> N;
+    vector<vector<Point>> earrings(N);
+    
+    // Read all earrings
+    for (int i = 0; i < N; i++) {
+        int K;
+        cin >> K;
+        earrings[i].resize(K);
+        for (int j = 0; j < K; j++) {
+            cin >> earrings[i][j].first >> earrings[i][j].second;
+        }
+    }
+    
+    // Find all matching pairs
+    vector<pair<int, int>> matching_pairs;
+    for (int i = 0; i < N; i++) {
+        for (int j = i + 1; j < N; j++) {
+            if (are_shapes_equivalent(earrings[i], earrings[j])) {
+                matching_pairs.emplace_back(i + 1, j + 1);
+            }
+        }
+    }
+    
+    // Print matching pairs
+    if (matching_pairs.empty()) {
+        cout << "No matching pairs" << endl;
+    } else {
+        sort(matching_pairs.begin(), matching_pairs.end());
+        for (size_t i = 0; i < matching_pairs.size(); ++i) {
+            cout << matching_pairs[i].first << " " << matching_pairs[i].second;
+            if (i < matching_pairs.size() - 1) {
+                cout << " ";
+            }
+        }
+        cout << endl;
+    }
+    
+    return 0;
+}

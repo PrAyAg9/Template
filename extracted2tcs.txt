@@ -1,0 +1,229 @@
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <algorithm>
+using namespace std;
+
+class Cell {
+public:
+    bool hasLeftWall;
+    bool hasRightWall;
+    bool hasTopWall;
+    bool hasBottomWall;
+    int groupID;
+
+    Cell() : hasLeftWall(false), hasRightWall(false), hasTopWall(false), hasBottomWall(false), groupID(-1) {}
+};
+
+class Shape {
+public:
+    int id;
+    int area;
+    vector<pair<int, int>> cells;
+    bool isExtracted;
+    bool isExtractable;
+
+    Shape(int shapeID) : id(shapeID), area(0), isExtracted(false), isExtractable(false) {}
+};
+
+class GridManager {
+private:
+    int rows, cols, squareSize, wallCount;
+    vector<vector<Cell>> grid;
+    vector<Shape> shapes;
+    int currentShapeID;
+
+    const int dx[4] = { -1, 1, 0, 0 };
+    const int dy[4] = { 0, 0, -1, 1 };
+
+public:
+    GridManager(int R, int C, int S, int N) : rows(R), cols(C), squareSize(S), wallCount(N), grid(R, vector<Cell>(C)), currentShapeID(0) {}
+    void addWall(int x1, int y1, int x2, int y2) {
+        if (x1 == x2) { 
+            int x = x1;
+            int yStart = min(y1, y2);
+            int yEnd = max(y1, y2);
+            for (int y = yStart; y < yEnd; y++) {
+                if (x > 0 && x <= cols)
+                    grid[y][x - 1].hasRightWall = true;
+                if (x >= 0 && x < cols)
+                    grid[y][x].hasLeftWall = true;
+            }
+        }
+        else if (y1 == y2) {
+            int y = y1;
+            int xStart = min(x1, x2);
+            int xEnd = max(x1, x2);
+            for (int x = xStart; x < xEnd; x++) {
+                if (y > 0 && y <= rows)
+                    grid[y - 1][x].hasBottomWall = true;
+                if (y >= 0 && y < rows)
+                    grid[y][x].hasTopWall = true;
+            }
+        }
+    }
+
+    void identifyShapes() {
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                if (grid[y][x].groupID == -1) {
+                    Shape newShape(currentShapeID);
+                    floodFill(x, y, newShape);
+                    shapes.push_back(newShape);
+                    currentShapeID++;
+                }
+            }
+        }
+    }
+
+    void floodFill(int startX, int startY, Shape &shape) {
+        queue<pair<int, int>> q;
+        q.push({startX, startY});
+        grid[startY][startX].groupID = shape.id;
+        shape.area++;
+        shape.cells.push_back({startX, startY});
+
+        while (!q.empty()) {
+            pair<int, int> current = q.front();
+            q.pop();
+            int cx = current.first;
+            int cy = current.second;
+
+            for (int dir = 0; dir < 4; dir++) {
+                int nx = cx + dx[dir];
+                int ny = cy + dy[dir];
+
+                if (nx < 0 || nx >= cols || ny < 0 || ny >= rows)
+                    continue;
+
+                bool hasWall = false;
+                if (dir == 0 && grid[cy][cx].hasLeftWall) hasWall = true;   
+                if (dir == 1 && grid[cy][cx].hasRightWall) hasWall = true;  
+                if (dir == 2 && grid[cy][cx].hasTopWall) hasWall = true;       
+                if (dir == 3 && grid[cy][cx].hasBottomWall) hasWall = true;    
+
+                if (!hasWall && grid[ny][nx].groupID == -1) {
+                    grid[ny][nx].groupID = shape.id;
+                    shape.area++;
+                    shape.cells.push_back({nx, ny});
+                    q.push({nx, ny});
+                }
+            }
+        }
+
+        shape.isExtractable = checkExtractable(shape);
+    }
+
+    bool checkExtractable(const Shape &shape) {
+        for (int yStart = 0; yStart <= rows - squareSize; yStart++) {
+            for (int xStart = 0; xStart <= cols - squareSize; xStart++) {
+                bool canFit = true;
+                for (auto &cell : shape.cells) {
+                    int cellX = cell.first;
+                    int cellY = cell.second;
+                    if (cellX < xStart || cellX >= xStart + squareSize || cellY < yStart || cellY >= yStart + squareSize) {
+                        canFit = false;
+                        break;
+                    }
+                }
+                if (canFit)
+                    return true;
+            }
+        }
+        return false;
+    }
+    pair<int, int> extractShapes() {
+        int extractionTurns = 0;
+        int totalExtractedArea = 0;
+
+        while (true) {
+            vector<int> availableShapes;
+            for (auto &shape : shapes) {
+                if (shape.isExtractable && !shape.isExtracted)
+                    availableShapes.push_back(shape.id);
+            }
+
+            if (availableShapes.empty())
+                break; 
+
+            int maxArea = 0;
+            int bestY = rows, bestX = cols;
+            vector<int> shapesToExtract;
+
+            for (int yStart = 0; yStart <= rows - squareSize; yStart++) {
+                for (int xStart = 0; xStart <= cols - squareSize; xStart++) {
+                    int currentArea = 0;
+                    vector<int> tempShapes;
+
+                    for (int shapeID : availableShapes) {
+                        bool fits = true;
+                        for (auto &cell : shapes[shapeID].cells) {
+                            int cellX = cell.first;
+                            int cellY = cell.second;
+                            if (cellX < xStart || cellX >= xStart + squareSize || cellY < yStart || cellY >= yStart + squareSize) {
+                                fits = false;
+                                break;
+                            }
+                        }
+                        if (fits) {
+                            currentArea += shapes[shapeID].area;
+                            tempShapes.push_back(shapeID);
+                        }
+                    }
+
+                    if (currentArea > maxArea) {
+                        maxArea = currentArea;
+                        bestY = yStart;
+                        bestX = xStart;
+                        shapesToExtract = tempShapes;
+                    }
+                    else if (currentArea == maxArea && currentArea > 0) {
+                        if (yStart < bestY || (yStart == bestY && xStart < bestX)) {
+                            bestY = yStart;
+                            bestX = xStart;
+                            shapesToExtract = tempShapes;
+                        }
+                    }
+                }
+            }
+
+            if (maxArea == 0)
+                break;
+
+            for (int shapeID : shapesToExtract) {
+                if (!shapes[shapeID].isExtracted) {
+                    shapes[shapeID].isExtracted = true;
+                    totalExtractedArea += shapes[shapeID].area;
+                }
+            }
+
+            extractionTurns++;
+        }
+
+        return {extractionTurns, totalExtractedArea};
+    }
+};
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(0);
+
+    int C, R, S, N;
+    cin >> C >> R >> S >> N;
+
+    GridManager gridManager(R, C, S, N);
+
+    for (int i = 0; i < N; i++) {
+        int x1, y1, x2, y2;
+        cin >> x1 >> y1 >> x2 >> y2;
+        gridManager.addWall(x1, y1, x2, y2);
+    }
+
+    gridManager.identifyShapes();
+
+    pair<int, int> result = gridManager.extractShapes();
+
+    cout << result.first << " " << result.second;
+
+    return 0;
+}

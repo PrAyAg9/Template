@@ -1,0 +1,157 @@
+#include <iostream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <unordered_set>
+#include <algorithm>
+
+using namespace std;
+
+// Structure to represent a chess piece
+struct ChessPiece {
+    char type; // 'Q', 'R', 'B'
+    int column; // 0 to 7 for 'A' to 'H'
+    int row;    // 0 to 7 for '1' to '8'
+    
+    bool operator<(const ChessPiece& other) const {
+        auto typeOrder = [](char c) -> int {
+            if (c == 'Q') return 0;
+            if (c == 'R') return 1;
+            if (c == 'B') return 2;
+            return 3; // Should not happen
+        };
+        if (typeOrder(type) != typeOrder(other.type))
+            return typeOrder(type) < typeOrder(other.type);
+        if (column != other.column)
+            return column < other.column;
+        return row < other.row;
+    }
+};
+
+// Structure to represent a chessboard position
+struct BoardPosition {
+    vector<ChessPiece> pieces; // Sorted list of pieces
+    
+    // Serialize the position into a string for hashing
+    string serialize() const {
+        string serialized;
+        for (const auto &piece : pieces) {
+            serialized += piece.type;
+            serialized += char('A' + piece.column);
+            serialized += char('1' + piece.row);
+            serialized += '|';
+        }
+        return serialized;
+    }
+    
+    // Sort pieces in the order Q, R, B
+    void sortPieces() {
+        sort(pieces.begin(), pieces.end());
+    }
+};
+
+// Function to generate all possible moves for a given piece in a position
+vector<ChessPiece> generateMoves(const BoardPosition &position, const ChessPiece &piece) {
+    vector<ChessPiece> possibleMoves;
+    vector<pair<int, int>> directions;
+    
+    if (piece.type == 'Q') {
+        directions = {{1,0}, {-1,0}, {0,1}, {0,-1}, {1,1}, {1,-1}, {-1,1}, {-1,-1}};
+    } else if (piece.type == 'R') {
+        directions = {{1,0}, {-1,0}, {0,1}, {0,-1}};
+    } else if (piece.type == 'B') {
+        directions = {{1,1}, {1,-1}, {-1,1}, {-1,-1}};
+    }
+    
+    vector<vector<bool>> occupied(8, vector<bool>(8, false));
+    for (const auto &p : position.pieces) {
+        if (p.type != piece.type || p.column != piece.column || p.row != piece.row) {
+            occupied[p.column][p.row] = true;
+        }
+    }
+    
+    for (const auto &[dc, dr] : directions) {
+        int newColumn = piece.column + dc;
+        int newRow = piece.row + dr;
+        while (newColumn >= 0 && newColumn < 8 && newRow >= 0 && newRow < 8) {
+            if (occupied[newColumn][newRow]) {
+                break;
+            }
+            ChessPiece newPiece = piece;
+            newPiece.column = newColumn;
+            newPiece.row = newRow;
+            possibleMoves.push_back(newPiece);
+            newColumn += dc;
+            newRow += dr;
+        }
+    }
+    return possibleMoves;
+}
+
+// Function to calculate unique board positions after a given number of plies
+int calculateUniquePositions(vector<ChessPiece> initialPieces, int plies) {
+    BoardPosition initialPosition;
+    initialPosition.pieces = initialPieces;
+    initialPosition.sortPieces();
+    
+    unordered_set<string> currentLayer;
+    currentLayer.insert(initialPosition.serialize());
+    
+    for (int depth = 1; depth <= plies; depth++) {
+        unordered_set<string> nextLayer;
+        for (const auto &posStr : currentLayer) {
+            BoardPosition position;
+            stringstream ss(posStr);
+            string pieceStr;
+            while (getline(ss, pieceStr, '|')) {
+                if (pieceStr.empty()) continue;
+                ChessPiece piece;
+                piece.type = pieceStr[0];
+                piece.column = pieceStr[1] - 'A';
+                piece.row = pieceStr[2] - '1';
+                position.pieces.push_back(piece);
+            }
+            for (const auto &piece : position.pieces) {
+                vector<ChessPiece> possibleMoves = generateMoves(position, piece);
+                for (const auto &newPiece : possibleMoves) {
+                    BoardPosition newPosition = position;
+                    for (auto &p : newPosition.pieces) {
+                        if (p.type == piece.type) {
+                            p.column = newPiece.column;
+                            p.row = newPiece.row;
+                            break;
+                        }
+                    }
+                    newPosition.sortPieces();
+                    string newPosStr = newPosition.serialize();
+                    nextLayer.insert(newPosStr);
+                }
+            }
+        }
+        currentLayer = move(nextLayer);
+    }
+    
+    return currentLayer.size();
+}
+
+int main() {
+    string inputLine;
+    getline(cin, inputLine);
+    
+    vector<ChessPiece> initialPieces;
+    stringstream ss(inputLine);
+    string token;
+    while (ss >> token) {
+        ChessPiece piece;
+        piece.type = token[0];
+        piece.column = token[1] - 'A';
+        piece.row = token[2] - '1';
+        initialPieces.push_back(piece);
+    }
+    
+    int plies;
+    cin >> plies;
+    
+    int result = calculateUniquePositions(initialPieces, plies);
+    cout << result << endl;
+}

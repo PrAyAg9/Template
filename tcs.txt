@@ -1,0 +1,122 @@
+#include <iostream>
+#include <vector>
+#include <map>
+#include <queue>
+#include <string>
+#include <sstream>
+#include <set>
+
+using namespace std;
+
+struct SnakeOrLadder {
+    int start;
+    int end;
+    string type; // "Snake" or "Ladder"
+};
+
+bool bfs_simulation(const vector<int>& die_rolls, const map<int, int>& board, int final_position) {
+    set<int> current_positions;
+    current_positions.insert(1);
+
+    for (int roll : die_rolls) {
+        set<int> next_positions;
+        for (int pos : current_positions) {
+            int new_pos = pos + roll;
+            if (new_pos > 100) {
+                new_pos = pos; // Can't move beyond 100
+            } else {
+                // Follow snakes and ladders
+                while (board.count(new_pos)) {
+                    new_pos = board.at(new_pos);
+                }
+            }
+            next_positions.insert(new_pos);
+        }
+        current_positions = next_positions;
+    }
+
+    // Check if final position is among possible positions and is valid
+    return current_positions.count(final_position) && !board.count(final_position);
+}
+
+int main() {
+    int N;
+    cin >> N;
+
+    vector<SnakeOrLadder> snakes_ladders;
+    map<int, int> board; // key: start cell, value: end cell
+    for (int i = 0; i < N; ++i) {
+        int start, end;
+        cin >> start >> end;
+        SnakeOrLadder s;
+        s.start = start;
+        s.end = end;
+        if (start > end) {
+            s.type = "Snake";
+        } else {
+            s.type = "Ladder";
+        }
+        snakes_ladders.push_back(s);
+        board[start] = end;
+    }
+
+    // Read die rolls
+    string die_input_line;
+    cin.ignore(); // Ignore the newline after N and the snakes/ladders
+    getline(cin, die_input_line);
+
+    vector<int> die_rolls;
+    stringstream ss(die_input_line);
+    int num;
+    while (ss >> num) {
+        die_rolls.push_back(num);
+    }
+
+    int final_position;
+    cin >> final_position;
+
+    // Simulate game without any switch using BFS
+    if (bfs_simulation(die_rolls, board, final_position)) {
+        cout << "Not affected";
+        return 0;
+    }
+
+    // Try switching each snake or ladder
+    bool found = false;
+    for (const SnakeOrLadder& s : snakes_ladders) {
+        // Create a modified board
+        map<int, int> modified_board = board;
+
+        // Remove the original snake or ladder
+        modified_board.erase(s.start);
+
+        // Switch the snake or ladder
+        SnakeOrLadder switched;
+        switched.start = s.end;
+        switched.end = s.start;
+        if (s.type == "Snake") {
+            switched.type = "Ladder";
+        } else {
+            switched.type = "Snake";
+        }
+
+        // Avoid placing a snake or ladder on cell 1
+        if (switched.start == 1) continue;
+
+        modified_board[switched.start] = switched.end;
+
+        // Simulate the game with the modified board using BFS
+        if (bfs_simulation(die_rolls, modified_board, final_position)) {
+            // Output the switched object
+            cout << switched.type << " " << switched.start << " " << switched.end;
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        cout << "Not reachable";
+    }
+
+    return 0;
+}
